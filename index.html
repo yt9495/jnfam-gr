@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0f2a44" />
+<title>JNFAM GR — Goods Receiving</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginView" class="login-wrap hidden">
+  <div class="login-card">
+    <div class="logo">JNFAM</div>
+    <h1>GR / Goods Receiving</h1>
+    <p class="muted">PO 대조 입고 검수 시스템</p>
+    <button id="btnGoogleLogin" class="btn primary big">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.5 6.1 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.3-2.1 14-5.4l-6.2-5.4C29.9 34.8 27.1 36 24 36c-5.3 0-9.7-3.1-11.3-7.9l-6.5 5C9.6 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4 5.4l6.2 5.4C37.1 40.6 44 35.5 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+      Google 계정으로 로그인
+    </button>
+    <p id="loginErr" class="err hidden"></p>
+    <p class="tiny muted">Firebase Authentication · 접근 권한은 관리자에게 문의하세요.</p>
+  </div>
+</div>
+
+<!-- ================= CONFIG WARNING ================= -->
+<div id="configView" class="login-wrap hidden">
+  <div class="login-card">
+    <div class="logo warn">!</div>
+    <h1>Firebase 설정 필요</h1>
+    <p class="muted"><code>public/firebase-config.js</code> 파일에 Firebase 프로젝트 설정값을 넣어주세요.</p>
+    <pre class="code">export const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...firebaseapp.com",
+  projectId: "...",
+  appId: "..."
+};</pre>
+    <p class="tiny muted">README.md의 <b>2단계 · Firebase 프로젝트 만들기</b>를 참고하세요.</p>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="appView" class="hidden">
+  <header class="topbar">
+    <div class="brand"><span class="mark">JNFAM</span><span class="sub">GR</span></div>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-view="dash">대시보드</button>
+      <button class="tab" data-view="po">PO 등록</button>
+      <button class="tab" data-view="recv">입고 검수</button>
+      <button class="tab" data-view="hist">입고 이력</button>
+      <button class="tab" data-view="exp">내보내기</button>
+    </nav>
+    <div class="user">
+      <img id="userPhoto" alt="" />
+      <span id="userName" class="tiny"></span>
+      <button id="btnLogout" class="btn ghost tiny">로그아웃</button>
+    </div>
+  </header>
+
+  <div id="syncBar" class="syncbar">데이터 동기화 중…</div>
+
+  <main>
+
+  <!-- ---------- DASHBOARD ---------- -->
+  <section id="view-dash" class="view active">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>미결 PO 라인 <span class="count" id="openCount"></span></h2>
+        <div class="filters">
+          <input id="dashSearch" class="inp" placeholder="PO / 품목 검색" />
+          <select id="dashStatus" class="inp">
+            <option value="open">미결만 (Not Received + Partial)</option>
+            <option value="all">전체</option>
+            <option value="Not Received">Not Received</option>
+            <option value="Partial">Partial</option>
+            <option value="Closed">Closed</option>
+            <option value="Over Received">Over Received</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl" id="openTbl"></table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>확인 필요 (Issue / Photo Missing) <span class="count" id="issueCount"></span></h2></div>
+      <div class="tbl-wrap"><table class="tbl" id="issueTbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ---------- PO REGISTER ---------- -->
+  <section id="view-po" class="view">
+    <div class="card">
+      <div class="card-head"><h2>PO 문서 업로드 → 자동 입력</h2></div>
+      <div id="drop" class="drop">
+        <div class="drop-icon">PDF</div>
+        <p><b>PO PDF를 여기에 끌어다 놓으세요</b></p>
+        <p class="tiny muted">여러 개 동시 업로드 가능 · 파일은 서버로 전송되지 않고 브라우저 안에서만 분석됩니다</p>
+        <label class="btn primary">파일 선택<input type="file" id="fileInput" accept="application/pdf" multiple hidden /></label>
+      </div>
+      <p id="parseMsg" class="msg hidden"></p>
+    </div>
+
+    <div id="poForm" class="card hidden">
+      <div class="card-head">
+        <h2>파싱 결과 확인 후 저장</h2>
+        <span class="badge" id="parseBadge"></span>
+      </div>
+
+      <div class="grid2">
+        <label>PO No. <span class="req">*</span><input id="f_poNo" class="inp" /></label>
+        <label>PO Date<input id="f_poDate" type="date" class="inp" /></label>
+        <label>Supplier<input id="f_supplier" class="inp" /></label>
+        <label>Project / Customer<input id="f_project" class="inp" /></label>
+        <label>Buyer<input id="f_buyer" class="inp" /></label>
+        <label>Discharge Site<input id="f_discharge" class="inp" /></label>
+        <label>Quote #<input id="f_quote" class="inp" /></label>
+        <label>Payment Term<input id="f_payterm" class="inp" /></label>
+        <label class="span2">PO Document Link<input id="f_docLink" class="inp" placeholder="SharePoint / Drive 링크" /></label>
+        <label class="span2">Remarks<input id="f_remarks" class="inp" /></label>
+      </div>
+
+      <h3>PO 라인</h3>
+      <div class="tbl-wrap"><table class="tbl edit" id="lineTbl"></table></div>
+      <div class="row-actions">
+        <button id="btnAddLine" class="btn ghost">+ 라인 추가</button>
+        <div class="spacer"></div>
+        <span class="tiny muted" id="totalsHint"></span>
+      </div>
+
+      <div class="row-actions end">
+        <button id="btnCancelPo" class="btn ghost">취소</button>
+        <button id="btnSavePo" class="btn primary">PO 저장</button>
+      </div>
+      <p id="poSaveMsg" class="msg hidden"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>등록된 PO <span class="count" id="poCount"></span></h2>
+        <button id="btnNewPo" class="btn ghost">+ 수기 등록</button>
+      </div>
+      <div class="tbl-wrap"><table class="tbl" id="poTbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ---------- RECEIVING ---------- -->
+  <section id="view-recv" class="view">
+    <div class="card">
+      <div class="card-head"><h2>1 · PO 라인 선택</h2></div>
+      <input id="recvSearch" class="inp big" placeholder="PO 번호 또는 품목으로 검색" />
+      <label class="chk"><input type="checkbox" id="recvOpenOnly" checked /> 미결 라인만 보기</label>
+      <div id="recvLines" class="line-picker"></div>
+    </div>
+
+    <div id="recvForm" class="card hidden">
+      <div class="card-head"><h2>2 · 입고 검수 입력</h2><span class="badge" id="recvLineBadge"></span></div>
+
+      <div class="po-ref" id="poRef"></div>
+
+      <div class="grid2">
+        <label>입고일 <span class="req">*</span><input id="r_date" type="date" class="inp" /></label>
+        <label>입고 번호<input id="r_no" class="inp" /></label>
+        <label>검수자<input id="r_receiver" class="inp" /></label>
+        <label>공급사 / 운송사<input id="r_carrier" class="inp" /></label>
+
+        <label class="span2 hl">
+          라벨의 품목코드 <span class="req">*</span>
+          <span class="inline">
+            <input id="r_itemCode" class="inp" placeholder="실제 라벨에 적힌 코드를 입력" />
+            <button id="btnSameItem" type="button" class="btn ghost tiny">PO와 동일</button>
+          </span>
+        </label>
+        <label>라벨 품목명<input id="r_itemDesc" class="inp" /></label>
+        <label>라벨 단위 <span class="req">*</span><select id="r_unit" class="inp"></select></label>
+
+        <label class="hl">실입고 수량 <span class="req">*</span><input id="r_qty" type="number" step="any" inputmode="decimal" class="inp big" /></label>
+        <label>Lot / Batch No.<input id="r_lot" class="inp" /></label>
+        <label>BOL / Delivery Note No.<input id="r_bol" class="inp" /></label>
+        <label>조치 / 담당<input id="r_action" class="inp" /></label>
+        <label class="span2">비고<input id="r_remarks" class="inp" /></label>
+      </div>
+
+      <h3>사진 기록</h3>
+      <div id="photoRows"></div>
+      <button id="btnAddPhoto" class="btn ghost">+ 사진 링크 추가</button>
+      <p class="tiny muted">사진은 SharePoint / Google Drive에 올린 뒤 공유 링크를 붙여넣으세요.</p>
+
+      <div class="verdict" id="verdict"></div>
+
+      <div class="row-actions end">
+        <button id="btnCancelRecv" class="btn ghost">취소</button>
+        <button id="btnSaveRecv" class="btn primary big">입고 저장</button>
+      </div>
+      <p id="recvSaveMsg" class="msg hidden"></p>
+    </div>
+  </section>
+
+  <!-- ---------- HISTORY ---------- -->
+  <section id="view-hist" class="view">
+    <div class="card">
+      <div class="card-head">
+        <h2>입고 이력 <span class="count" id="histCount"></span></h2>
+        <input id="histSearch" class="inp" placeholder="PO / 품목 / 검수자 검색" />
+      </div>
+      <div class="tbl-wrap"><table class="tbl" id="histTbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ---------- EXPORT ---------- -->
+  <section id="view-exp" class="view">
+    <div class="card">
+      <div class="card-head"><h2>엑셀 내보내기</h2></div>
+      <p>현재 <b>JNFAM PO_Receiving_Checksheet.xlsx</b>와 동일한 시트 구성(Dashboard / PO_Master / Receiving_Check / Photo_Log / Lists)으로 내려받습니다. 수식 대신 계산된 값이 들어갑니다.</p>
+      <div class="row-actions">
+        <button id="btnExportXlsx" class="btn primary big">XLSX 다운로드</button>
+        <button id="btnExportJson" class="btn ghost">JSON 백업</button>
+      </div>
+      <p id="expMsg" class="msg hidden"></p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>데이터 현황</h2></div>
+      <div class="tbl-wrap"><table class="tbl" id="statTbl"></table></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
