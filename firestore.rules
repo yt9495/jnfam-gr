@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 로그인한 사용자만 접근. 회사 도메인으로 제한하려면 isMember() 를 사용하세요.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // 도메인 제한 예시 — 사용하려면 아래 주석을 풀고 signedIn() 대신 isMember() 를 쓰세요.
+    // function isMember() {
+    //   return request.auth != null
+    //     && request.auth.token.email_verified == true
+    //     && request.auth.token.email.matches('.*@jnfam[.]net$');
+    // }
+
+    match /pos/{poId} {
+      allow read:   if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.poNo is string
+        && request.resource.data.poNo.size() > 0
+        && request.resource.data.lines is list;
+      allow delete: if signedIn();
+    }
+
+    match /receipts/{rcId} {
+      allow read:   if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.poNo is string
+        && request.resource.data.receivedQty is number
+        && request.resource.data.receivedQty > 0
+        && request.resource.data.receiptDate is string;
+      allow update, delete: if signedIn();
+    }
+
+    // 그 외 경로는 모두 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
