@@ -1,6 +1,6 @@
 /*
  * © 2025–2026 Young Tai Kang. All rights reserved.
- * Licensed to JNF AM LLC for internal use.
+ * Unauthorized use, copying, modification, or distribution without the written permission of Young Tai Kang is prohibited.
  */
 /* =====================================================================
    GR 계산 로직 — 원본 엑셀(JNFAM PO_Receiving_Checksheet.xlsx) 수식과 1:1 대응

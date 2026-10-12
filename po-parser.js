@@ -1,6 +1,6 @@
 /*
  * © 2025–2026 Young Tai Kang. All rights reserved.
- * Licensed to JNF AM LLC for internal use.
+ * Unauthorized use, copying, modification, or distribution without the written permission of Young Tai Kang is prohibited.
  */
 /* =====================================================================
    PO PDF 파서 — pdf.js 텍스트 좌표 기반
