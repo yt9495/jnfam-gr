@@ -1,3 +1,7 @@
+/*
+ * © 2025–2026 Young Tai Kang. All rights reserved.
+ * Licensed to JNF AM LLC for internal use.
+ */
 /* =====================================================================
    PO PDF 파서 — pdf.js 텍스트 좌표 기반
    서버 없이 브라우저에서만 동작합니다. (Node 테스트에서도 재사용)

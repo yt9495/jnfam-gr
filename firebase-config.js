@@ -1,3 +1,7 @@
+/*
+ * © 2025–2026 Young Tai Kang. All rights reserved.
+ * Licensed to JNF AM LLC for internal use.
+ */
 /* ---------------------------------------------------------------
    Firebase 프로젝트 설정 — jnfam-gr
    Firebase 콘솔 → 프로젝트 설정 → 내 앱 → jnfam-gr-web → 구성

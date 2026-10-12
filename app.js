@@ -1,3 +1,7 @@
+/*
+ * © 2025–2026 Young Tai Kang. All rights reserved.
+ * Licensed to JNF AM LLC for internal use.
+ */
 /* =====================================================================
    JNFAM GR — Goods Receiving
    PO 대조 입고 검수 웹앱 (Firebase Spark 무료 플랜 전용, 빌드 툴 없음)
