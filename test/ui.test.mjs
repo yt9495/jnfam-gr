@@ -12,6 +12,7 @@ global.HTMLElement = dom.window.HTMLElement; global.Blob = dom.window.Blob;
 global.XLSX = XLSX;
 dom.window.confirm = () => true; dom.window.alert = () => {};
 global.confirm = () => true;
+global.prompt = () => '식음료';
 
 // 스텁 데이터 주입
 const stub = await import('./fb-stub.js');
@@ -51,7 +52,7 @@ t('동기화 배너 사라짐', $('syncBar').classList.contains('hidden'), true)
 
 console.log('\n— 대시보드 —');
 const kpi = [...$('kpis').querySelectorAll('.kpi')].map(k => [k.querySelector('.l').textContent, k.querySelector('.v').textContent]);
-t('KPI 8종', kpi.length, 8);
+t('KPI 9종', kpi.length, 9);
 t('Total PO Lines = 2', kpi.find(k=>k[0]==='Total PO Lines')[1], '2');
 t('Partial = 1',        kpi.find(k=>k[0]==='Partial')[1], '1');
 t('Over Received = 1',  kpi.find(k=>k[0]==='Over Received')[1], '1');
@@ -60,6 +61,12 @@ t('Photo Missing = 1',  kpi.find(k=>k[0]==='Photo Missing')[1], '1');
 t('Open Balance = 60',  kpi.find(k=>k[0]==='Open Balance Qty')[1], '60');
 t('미결 라인 테이블 1행', $('openTbl').querySelectorAll('tbody tr').length, 1);
 t('확인 필요 1건',        $('issueTbl').querySelectorAll('tbody tr').length, 1);
+t('승인권자: 사진 불필요 승인 버튼', $('issueTbl').querySelectorAll('[data-waive]').length, 1);
+t('승인권자: 일괄 승인 버튼 표시', $('btnWaiveSel').classList.contains('hidden'), false);
+$('issueTbl').querySelector('[data-waive]').dispatchEvent(new dom.window.Event('click'));
+await new Promise(r => setTimeout(r, 10));
+t('승인 → photoApproval 기록', stub.WRITES.map(w => [w.ref.id, w.data.photoApproval.byEmail, w.data.photoApproval.note]),
+  [['b','yt9495@gmail.com','식음료']]);
 
 console.log('\n— PO / 이력 목록 —');
 t('PO 목록 1건', $('poTbl').querySelectorAll('tbody tr').length, 1);

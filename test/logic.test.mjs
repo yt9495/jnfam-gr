@@ -58,6 +58,8 @@ t('r8 PO 없음 → PO Not Found / Issue', [byId('r8').itemCheck, byId('r8').qty
 console.log('\n— Receiving_Check Y열 (Photo Status) —');
 t('사진 링크+파일명 → Photo OK', byId('r1').photoStatus, 'Photo OK');
 t('사진 없음 → Photo Missing',   byId('r7').photoStatus, 'Photo Missing');
+const RW = computeReceipts(pos, [{ ...byId('r7'), photoApproval:{ byEmail:'yt9495@gmail.com', by:'김용태' } }]);
+t('사진 없음 + 승인 → Photo Waived', RW[0].photoStatus, 'Photo Waived');
 
 console.log('\n— 대소문자·공백 무시 매칭 —');
 const R2 = computeReceipts(pos, [{ id:'x', receiptDate:'2026-05-10', poNo:' po-1001 ', poLine:1,

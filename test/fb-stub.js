@@ -11,6 +11,10 @@ export const setDoc = async () => {};
 export const addDoc = async () => {};
 export const deleteDoc = async () => {};
 export const getDoc = async () => ({ exists: () => false });
+export const updateDoc = async () => {};
+export const deleteField = () => '__delete__';
+export const WRITES = [];
+export const writeBatch = () => ({ update(ref, data){ WRITES.push({ ref, data }); }, commit: async () => {} });
 export const query = (c) => c;
 export const orderBy = () => ({});
 

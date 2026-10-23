@@ -14,6 +14,7 @@
                     T열 Overall Status   = Q·R 불일치 또는 S=Over Received → Issue
                                            그 외 S=Partial → Partial, 아니면 OK
                     Y열 Photo Status     = 링크·파일명 모두 있으면 Photo OK
+                                           사진이 없어도 승인자가 '사진 불필요'로 승인하면 Photo Waived
    ===================================================================== */
 
 export const num  = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
@@ -48,7 +49,7 @@ export function computeLines(pos, receipts){
 }
 
 /** 한 건의 입고에 대한 검증 결과 (화면 미리보기와 저장 결과가 같은 함수를 사용) */
-export function judge({ poItemCode, poUnit, orderedQty, rcvItemCode, rcvUnit, cumReceived, photos }){
+export function judge({ poItemCode, poUnit, orderedQty, rcvItemCode, rcvUnit, cumReceived, photos, photoApproval }){
   const notFound = orderedQty == null;
   const itemCheck = notFound ? 'PO Not Found'
     : (norm(rcvItemCode) === norm(poItemCode) ? 'OK' : 'Item Mismatch');
@@ -60,7 +61,8 @@ export function judge({ poItemCode, poUnit, orderedQty, rcvItemCode, rcvUnit, cu
     : ((itemCheck !== 'OK' || unitCheck !== 'OK' || qtyStatus === 'Over Received') ? 'Issue'
        : qtyStatus === 'Partial' ? 'Partial' : 'OK');
   const list = photos || [];
-  const photoStatus = (list.length && list.every(p => p.link && p.fileName)) ? 'Photo OK' : 'Photo Missing';
+  const photoStatus = (list.length && list.every(p => p.link && p.fileName)) ? 'Photo OK'
+    : (photoApproval && photoApproval.byEmail) ? 'Photo Waived' : 'Photo Missing';
   return { itemCheck, unitCheck, qtyStatus, overall, photoStatus };
 }
 
@@ -83,7 +85,8 @@ export function computeReceipts(pos, receipts){
       const v = judge({
         poItemCode: po ? po.itemCode : null, poUnit: po ? po.unit : null,
         orderedQty: po ? po.orderedQty : null,
-        rcvItemCode: r.rcvItemCode, rcvUnit: r.rcvUnit, cumReceived: cum, photos
+        rcvItemCode: r.rcvItemCode, rcvUnit: r.rcvUnit, cumReceived: cum, photos,
+        photoApproval: r.photoApproval
       });
       return {
         ...r, po,

@@ -16,7 +16,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import {
-  getFirestore, collection, doc, setDoc, addDoc, deleteDoc, getDoc,
+  getFirestore, collection, doc, setDoc, addDoc, deleteDoc, getDoc, updateDoc, deleteField, writeBatch,
   onSnapshot, query, orderBy, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
@@ -107,13 +107,22 @@ function subscribe(){
 const buildLines    = () => computeLines(state.pos, state.receipts);
 const buildReceipts = () => computeReceipts(state.pos, state.receipts);
 
+const isApprover = () => !!user && ((APP && APP.photoApprovers) || [])
+  .some(e => e.toLowerCase() === (user.email || '').toLowerCase());
+
 const pillFor = (s) => {
   if(['OK','Closed','Photo OK'].includes(s)) return 'ok';
+  if(s === 'Photo Waived') return 'info';
   if(['Partial'].includes(s)) return 'warn';
   if(['Issue','Over Received','Item Mismatch','Unit Mismatch','PO Not Found','Photo Missing'].includes(s)) return 'bad';
   return 'grey';
 };
 const pill = (s) => s ? `<span class="pill ${pillFor(s)}">${esc(s)}</span>` : '';
+const waiveTip = (r) => r.photoApproval
+  ? `승인: ${r.photoApproval.by || r.photoApproval.byEmail} · ${r.photoApproval.atISO ? r.photoApproval.atISO.slice(0,10) : ''}${r.photoApproval.note ? ' · ' + r.photoApproval.note : ''}`
+  : '';
+const photoPill = (r) => r.photoStatus === 'Photo Waived'
+  ? `<span class="pill info" title="${esc(waiveTip(r))}">Photo Waived</span>` : pill(r.photoStatus);
 
 /* =====================================================================
    4. 렌더링
@@ -141,6 +150,7 @@ function renderDash(lines, rcs){
     ['Over Received', c('Over Received'), 'bad'],
     ['Receiving Issues', issues.length, 'bad'],
     ['Photo Missing', photoMissing.length, 'warn'],
+    ['Photo Waived', rcs.filter(r => r.photoStatus === 'Photo Waived').length, ''],
     ['Open Balance Qty', fmtN(openQty), '']
   ].map(([l,v,k]) => `<div class="kpi ${k}"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
 
@@ -166,16 +176,53 @@ function renderDash(lines, rcs){
      : `<tr><td class="empty" colspan="11">표시할 PO 라인이 없습니다.</td></tr>`) + '</tbody>';
 
   const bad = [...issues, ...photoMissing.filter(p => p.overall !== 'Issue')];
+  const canApprove = isApprover();
+  const approvable = (r) => canApprove && r.photoStatus === 'Photo Missing';
   $('issueCount').textContent = bad.length;
+  $('btnWaiveSel').classList.toggle('hidden', !canApprove || !bad.some(approvable));
   $('issueTbl').innerHTML =
-    `<thead><tr><th>입고일</th><th>PO</th><th>Line</th><th>라벨 코드</th><th>PO 코드</th>
-     <th>Item</th><th>Unit</th><th>Qty</th><th>Overall</th><th>Photo</th><th>검수자</th></tr></thead><tbody>` +
+    `<thead><tr>${canApprove ? '<th style="width:32px"><input type="checkbox" id="waiveAll" title="사진 미첨부 전체 선택" /></th>' : ''}
+     <th>입고일</th><th>PO</th><th>Line</th><th>라벨 코드</th><th>PO 코드</th>
+     <th>Item</th><th>Unit</th><th>Qty</th><th>Overall</th><th>Photo</th><th>검수자</th>
+     ${canApprove ? '<th></th>' : ''}</tr></thead><tbody>` +
     (bad.length ? bad.map(r => `<tr>
+      ${canApprove ? `<td>${approvable(r) ? `<input type="checkbox" class="waive-chk" value="${esc(r.id)}" />` : ''}</td>` : ''}
       <td>${esc(r.receiptDate)}</td><td><b>${esc(r.poNo)}</b></td><td class="num">${esc(r.poLine)}</td>
       <td>${esc(r.rcvItemCode)}</td><td>${esc(r.poItemCode)}</td>
       <td>${pill(r.itemCheck)}</td><td>${pill(r.unitCheck)}</td><td>${pill(r.qtyStatus)}</td>
-      <td>${pill(r.overall)}</td><td>${pill(r.photoStatus)}</td><td>${esc(r.receiver||'')}</td></tr>`).join('')
-     : `<tr><td class="empty" colspan="11">확인이 필요한 항목이 없습니다. 👍</td></tr>`) + '</tbody>';
+      <td>${pill(r.overall)}</td><td>${photoPill(r)}</td><td>${esc(r.receiver||'')}</td>
+      ${canApprove ? `<td>${approvable(r) ? `<button class="btn ghost tiny" data-waive="${esc(r.id)}">사진 불필요 승인</button>` : ''}</td>` : ''}</tr>`).join('')
+     : `<tr><td class="empty" colspan="${canApprove ? 13 : 11}">확인이 필요한 항목이 없습니다. 👍</td></tr>`) + '</tbody>';
+
+  if(canApprove){
+    $('issueTbl').querySelectorAll('[data-waive]').forEach(b => b.onclick = () => waivePhotos([b.dataset.waive]));
+    const all = $('waiveAll');
+    if(all) all.onchange = () => $('issueTbl').querySelectorAll('.waive-chk').forEach(c => c.checked = all.checked);
+  }
+}
+
+/* ---------- 사진 불필요 승인 / 취소 (승인권자 전용) ---------- */
+async function waivePhotos(ids){
+  if(!isApprover()) return toast('승인 권한이 없습니다.', true);
+  if(!ids.length) return toast('승인할 항목을 선택하세요.', true);
+  const note = prompt(`${ids.length}건을 '사진 불필요'로 승인합니다.\n메모(선택, 예: 소모품·식음료):`, '');
+  if(note === null) return;
+  const approval = {
+    by: user.displayName || user.email, byEmail: (user.email || '').toLowerCase(),
+    atISO: new Date().toISOString(), at: serverTimestamp(), note: note.trim()
+  };
+  try{
+    const b = writeBatch(db);
+    ids.forEach(id => b.update(doc(db,'receipts',id), { photoApproval: approval }));
+    await b.commit();
+    toast(`${ids.length}건 사진 불필요 승인 완료 — 확인 필요 목록에서 제외됩니다.`);
+  } catch(e){ toast('승인 실패: ' + e.message, true); }
+}
+async function unwaivePhoto(id){
+  if(!isApprover()) return toast('승인 권한이 없습니다.', true);
+  if(!confirm('사진 불필요 승인을 취소할까요? 다시 확인 필요 목록에 표시됩니다.')) return;
+  try{ await updateDoc(doc(db,'receipts',id), { photoApproval: deleteField() }); toast('승인을 취소했습니다.'); }
+  catch(e){ toast('취소 실패: ' + e.message, true); }
 }
 
 /* ---------- PO 목록 ---------- */
@@ -251,10 +298,13 @@ function renderHist(rcs){
       <td class="num">${esc(r.poLine)}</td><td>${esc(r.rcvItemCode)}</td><td>${esc(r.rcvUnit)}</td>
       <td class="num">${fmtN(r.receivedQty)}</td><td class="num">${fmtN(r.cumReceived)}</td>
       <td class="num">${r.remainingAfter==null?'':fmtN(r.remainingAfter)}</td>
-      <td>${pill(r.overall)}</td><td>${pill(r.photoStatus)}</td><td>${esc(r.receiver||'')}</td>
+      <td>${pill(r.overall)}</td><td>${photoPill(r)}${r.photoStatus === 'Photo Waived' && isApprover()
+        ? ` <button class="btn ghost tiny" data-unwaive="${esc(r.id)}" title="승인 취소">↺</button>` : ''}</td>
+      <td>${esc(r.receiver||'')}</td>
       <td><button class="btn danger tiny" data-delrc="${esc(r.id)}">삭제</button></td></tr>`).join('')
      : `<tr><td class="empty" colspan="13">입고 기록이 없습니다.</td></tr>`) + '</tbody>';
 
+  $('histTbl').querySelectorAll('[data-unwaive]').forEach(b => b.onclick = () => unwaivePhoto(b.dataset.unwaive));
   $('histTbl').querySelectorAll('[data-delrc]').forEach(b => b.onclick = async () => {
     if(!confirm('이 입고 기록을 삭제할까요?')) return;
     await deleteDoc(doc(db,'receipts', b.dataset.delrc)); toast('입고 기록을 삭제했습니다.');
@@ -515,6 +565,7 @@ function exportXlsx(){
     ['Over Received PO Lines', c('Over Received')],
     ['Receiving Issues', rcs.filter(r=>r.overall==='Issue').length],
     ['Photo Missing', rcs.filter(r=>r.photoStatus==='Photo Missing').length],
+    ['Photo Waived', rcs.filter(r=>r.photoStatus==='Photo Waived').length],
     ['Open Balance Qty Total', lines.reduce((s,l)=>s+Math.max(0,l.remaining),0)],
     [],['Exported', new Date().toISOString().replace('T',' ').slice(0,19)],
     ['Exported by', user?.email || '']
@@ -545,7 +596,7 @@ function exportXlsx(){
     r.rcvItemCode, r.rcvItemDesc, r.rcvUnit, r.poItemCode, r.poItemDesc, r.poUnit, r.orderedQty,
     r.receivedQty, r.cumReceived, r.remainingAfter, r.itemCheck, r.unitCheck, r.qtyStatus, r.overall,
     r.lot, r.bol, (r.photos[0]||{}).link || '', (r.photos[0]||{}).fileName || '', r.photoStatus,
-    r.remarks, r.action ]);
+    [r.remarks, r.photoApproval ? '[사진 불필요 ' + waiveTip(r) + ']' : ''].filter(Boolean).join(' '), r.action ]);
   const wsR = XLSX.utils.aoa_to_sheet([rcHdr, ...rcRows]);
   wsR['!cols'] = rcHdr.map((h,i)=>({wch: [12,14,12,18,16,8,20,26,12,18,26,10,12,14,14,16,14,14,14,14,16,20,30,18,14,24,18][i] || 14}));
   XLSX.utils.book_append_sheet(wb, wsR, 'Receiving_Check');
@@ -647,6 +698,7 @@ $('btnAddPhoto').onclick = () => { photoDraft.push({type:'Product Label',fileNam
 $('btnCancelRecv').onclick = () => { $('recvForm').classList.add('hidden'); curLine = null; };
 $('btnSaveRecv').onclick = saveReceipt;
 $('btnExportXlsx').onclick = exportXlsx;
+$('btnWaiveSel').onclick = () => waivePhotos([...document.querySelectorAll('#issueTbl .waive-chk:checked')].map(c => c.value));
 $('btnExportJson').onclick = exportJson;
 
 boot();

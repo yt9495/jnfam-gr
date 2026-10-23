@@ -19,5 +19,8 @@ export const firebaseConfig = {
 export const APP = {
   // 특정 도메인 계정만 허용하려면 아래에 도메인을 넣으세요. 예: ['jnfam.net']
   // 비워두면 Google 계정으로 로그인한 사람은 누구나 사용할 수 있습니다.
-  allowedDomains: []
+  allowedDomains: [],
+
+  // '사진 불필요' 승인 권한이 있는 계정 (소문자). firestore.rules 의 isApprover() 목록과 같게 유지하세요.
+  photoApprovers: ['yt9495@gmail.com']
 };
