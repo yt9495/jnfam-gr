@@ -44,6 +44,11 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
 
+    // 고정자산 앱 (로그인 없이 사용)
+    match /fa_assets/{id} { allow read, write: if true; }
+    match /fa_photos/{id} { allow read, write: if true; }
+    match /fa_meta/{id}   { allow read, write: if true; }
+
     // 그 외 경로는 모두 차단
     match /{document=**} {
       allow read, write: if false;
